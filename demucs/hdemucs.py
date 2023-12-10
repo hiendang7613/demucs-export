@@ -35,8 +35,8 @@ def pad1d(x: torch.Tensor, paddings: tp.Tuple[int, int], mode: str = 'constant',
             paddings = (padding_left - extra_pad_left, padding_right - extra_pad_right)
             x = F.pad(x, (extra_pad_left, extra_pad_right))
     out = F.pad(x, paddings, mode, value)
-    assert out.shape[-1] == length + padding_left + padding_right
-    assert (out[..., padding_left: padding_left + length] == x0).all()
+    # assert out.shape[-1] == length + padding_left + padding_right
+    # assert (out[..., padding_left: padding_left + length] == x0).all()
     return out
 
 
@@ -329,7 +329,7 @@ class HDecLayer(nn.Module):
                 z = z[..., self.pad:-self.pad, :]
         else:
             z = z[..., self.pad:self.pad + length]
-            assert z.shape[-1] == length, (z.shape[-1], length)
+            # assert z.shape[-1] == length, (z.shape[-1], length)
         if not self.last:
             z = F.gelu(z)
         return z, y

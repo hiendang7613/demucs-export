@@ -6,17 +6,19 @@
 """Conveniance wrapper to perform STFT and iSTFT"""
 
 import torch as th
+import torch
 
 
-def spectro(x, n_fft=512, hop_length=None, pad=0):
-    *other, length = x.shape
+@torch.jit.script
+def spectro(x, n_fft: int=512, hop_length: int=1024, pad: int=0, length: int=347136):
+    b, c, length = x.shape
     x = x.reshape(-1, length)
     is_mps = x.device.type == 'mps'
     if is_mps:
         x = x.cpu()
     z = th.stft(x,
                 n_fft * (1 + pad),
-                hop_length or n_fft // 4,
+                hop_length,
                 window=th.hann_window(n_fft).to(x),
                 win_length=n_fft,
                 normalized=True,
@@ -24,11 +26,12 @@ def spectro(x, n_fft=512, hop_length=None, pad=0):
                 return_complex=True,
                 pad_mode='reflect')
     _, freqs, frame = z.shape
-    return z.view(*other, freqs, frame)
+    return z.view(b, c, freqs, frame)
 
-
-def ispectro(z, hop_length=None, length=None, pad=0):
-    *other, freqs, frames = z.shape
+@torch.jit.script
+def ispectro(z, hop_length: int=1024, length: int=347136, pad: int=0):
+    # *other, freqs, frames = z.shape
+    b, w, c, freqs, frames = z.shape
     n_fft = 2 * freqs - 2
     z = z.view(-1, freqs, frames)
     win_length = n_fft // (1 + pad)
@@ -44,4 +47,4 @@ def ispectro(z, hop_length=None, length=None, pad=0):
                  length=length,
                  center=True)
     _, length = x.shape
-    return x.view(*other, length)
+    return x.view(b, w, c, length)

@@ -23,7 +23,8 @@ from .states import capture_init
 from .spec import spectro, ispectro
 from .hdemucs import pad1d, ScaledEmbedding, HEncLayer, MultiWrap, HDecLayer
 
-
+hl = 1024
+nfft = 4096
 class HTDemucs(nn.Module):
     """
     Spectrogram and hybrid Demucs model.
@@ -417,10 +418,16 @@ class HTDemucs(nn.Module):
         else:
             self.crosstransformer = None
 
-    def _spec(self, x):
-        hl = self.hop_length
-        nfft = self.nfft
-        x0 = x  # noqa
+    
+    @torch.jit.script
+    def _spec(x, nfft: int=4096, hl: int=1024):
+        # hl = 1024
+        # nfft = torch.tensor(4096)
+        # hl = self.hop_length
+        # nfft = self.nfft
+        # print("hl", hl)
+        # print("nfft", nfft)
+        # x0 = x  # noqa
 
         # We re-pad the signal in order to keep the property
         # that the size of the output is exactly the size of the input
@@ -429,13 +436,13 @@ class HTDemucs(nn.Module):
         # which is not supported by torch.stft.
         # Having all convolution operations follow this convention allow to easily
         # align the time and frequency branches later on.
-        assert hl == nfft // 4
+        # assert hl == nfft // 4
         le = int(math.ceil(x.shape[-1] / hl))
         pad = hl // 2 * 3
         x = pad1d(x, (pad, pad + le * hl - x.shape[-1]), mode="reflect")
 
         z = spectro(x, nfft, hl)[..., :-1, :]
-        assert z.shape[-1] == le + 4, (z.shape, x.shape, le)
+        # assert z.shape[-1] == le + 4, (z.shape, x.shape, le)
         z = z[..., 2: 2 + le]
         return z
 

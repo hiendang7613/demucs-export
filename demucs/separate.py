@@ -1,21 +1,15 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
 import argparse
-import sys
+# import sys
 from pathlib import Path
 
-from dora.log import fatal
+# from dora.log import fatal
 import torch as th
 
-from .api import Separator, save_audio, list_models
+from .api import Separator, save_audio#, list_models
 
-from .apply import BagOfModels
-from .htdemucs import HTDemucs
-from .pretrained import add_model_flags, ModelLoadingError
+# from .apply import BagOfModels
+# from .htdemucs import HTDemucs
+from .pretrained import add_model_flags#, ModelLoadingError
 
 
 def get_parser():
@@ -102,120 +96,46 @@ def get_parser():
 def main(opts=None):
     parser = get_parser()
     args = parser.parse_args(opts)
-    if args.list_models:
-        models = list_models(args.repo)
-        print("Bag of models:", end="\n    ")
-        print("\n    ".join(models["bag"]))
-        print("Single models:", end="\n    ")
-        print("\n    ".join(models["single"]))
-        sys.exit(0)
-    if len(args.tracks) == 0:
-        print("error: the following arguments are required: tracks", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        separator = Separator(model=args.name,
-                              repo=args.repo,
-                              device=args.device,
-                              shifts=args.shifts,
-                              split=args.split,
-                              overlap=args.overlap,
-                              progress=True,
-                              jobs=args.jobs,
-                              segment=args.segment)
-    except ModelLoadingError as error:
-        fatal(error.args[0])
-
-    max_allowed_segment = float('inf')
-    if isinstance(separator.model, HTDemucs):
-        max_allowed_segment = float(separator.model.segment)
-    elif isinstance(separator.model, BagOfModels):
-        max_allowed_segment = separator.model.max_allowed_segment
-    if args.segment is not None and args.segment > max_allowed_segment:
-        fatal("Cannot use a Transformer model with a longer segment "
-              f"than it was trained for. Maximum segment is: {max_allowed_segment}")
-
-    if isinstance(separator.model, BagOfModels):
-        print(
-            f"Selected model is a bag of {len(separator.model.models)} models. "
-            "You will see that many progress bars per track."
-        )
-
-    if args.stem is not None and args.stem not in separator.model.sources:
-        fatal(
-            'error: stem "{stem}" is not in selected model. '
-            "STEM must be one of {sources}.".format(
-                stem=args.stem, sources=", ".join(separator.model.sources)
-            )
-        )
+    # print(args)
+    separator = Separator(model=args.name,
+                            repo=args.repo,
+                            device=args.device,
+                            # shifts=args.shifts,
+                            # split=args.split,
+                            overlap=args.overlap,
+                            # progress=True,
+                            # jobs=args.jobs,
+                            # segment=args.segment
+                            )
+   
     out = args.out / args.name
     out.mkdir(parents=True, exist_ok=True)
-    print(f"Separated tracks will be stored in {out.resolve()}")
+    # print(f"Separated tracks will be stored in {out.resolve()}")
     for track in args.tracks:
-        if not track.exists():
-            print(f"File {track} does not exist. If the path contains spaces, "
-                  'please try again after surrounding the entire path with quotes "".',
-                  file=sys.stderr)
-            continue
-        print(f"Separating track {track}")
+      
+        _, res = separator.separate_audio_file(track)
 
-        origin, res = separator.separate_audio_file(track)
-
-        if args.mp3:
-            ext = "mp3"
-        elif args.flac:
-            ext = "flac"
-        else:
-            ext = "wav"
+        ext = "mp3"
+        # ext = "wav"
+        
         kwargs = {
-            "samplerate": separator.samplerate,
+            "samplerate": separator._samplerate,
             "bitrate": args.mp3_bitrate,
             "preset": args.mp3_preset,
             "clip": args.clip_mode,
             "as_float": args.float32,
             "bits_per_sample": 24 if args.int24 else 16,
         }
-        if args.stem is None:
-            for name, source in res.items():
-                stem = out / args.filename.format(
-                    track=track.name.rsplit(".", 1)[0],
-                    trackext=track.name.rsplit(".", 1)[-1],
-                    stem=name,
-                    ext=ext,
-                )
-                stem.parent.mkdir(parents=True, exist_ok=True)
-                save_audio(source, str(stem), **kwargs)
-        else:
+
+        for name, source in res.items():
             stem = out / args.filename.format(
                 track=track.name.rsplit(".", 1)[0],
                 trackext=track.name.rsplit(".", 1)[-1],
-                stem="minus_" + args.stem,
-                ext=ext,
-            )
-            if args.other_method == "minus":
-                stem.parent.mkdir(parents=True, exist_ok=True)
-                save_audio(origin - res[args.stem], str(stem), **kwargs)
-            stem = out / args.filename.format(
-                track=track.name.rsplit(".", 1)[0],
-                trackext=track.name.rsplit(".", 1)[-1],
-                stem=args.stem,
+                stem=name,
                 ext=ext,
             )
             stem.parent.mkdir(parents=True, exist_ok=True)
-            save_audio(res.pop(args.stem), str(stem), **kwargs)
-            # Warning : after poping the stem, selected stem is no longer in the dict 'res'
-            if args.other_method == "add":
-                other_stem = th.zeros_like(next(iter(res.values())))
-                for i in res.values():
-                    other_stem += i
-                stem = out / args.filename.format(
-                    track=track.name.rsplit(".", 1)[0],
-                    trackext=track.name.rsplit(".", 1)[-1],
-                    stem="no_" + args.stem,
-                    ext=ext,
-                )
-                stem.parent.mkdir(parents=True, exist_ok=True)
-                save_audio(other_stem, str(stem), **kwargs)
+            save_audio(source, str(stem), **kwargs)
 
 
 if __name__ == "__main__":
